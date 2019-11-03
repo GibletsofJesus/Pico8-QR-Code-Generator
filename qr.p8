@@ -34,22 +34,22 @@ function makeQRCode(dataToEncode)
  --lets use alphanumeric encoding since we're working with URLS
  --    WRONG DUMMY, can't have ? or caps which rules out youtube URLs for a start
 
- --let's also go with the M error correction level (15% of data can be lost and still readable)
- local dataSize = #dataToEncode * 1.15
- local version = findMinimumQrCodeVersionRequiredForMLevelErrorCorrectionOfAlphanumericData(dataSize)
+ --let's also go with the L error correction level (15% of data can be lost and still readable)
+ local dataSize = #dataToEncode * 1.07
+ local version = findMinimumQrCodeVersionRequiredForLLevelErrorCorrectionOfAlphanumericData(dataSize)
 
  local encodedData = encodeDataAsBinaryString(dataToEncode, version)
- --output encoded data as chunks of 8 bits
- for i=1,#encodedData,16 do
-  ?sub(encodedData,i,i+7) .. " " .. sub(encodedData,i+8,i+15)
- end
 
- for i=1,#encodedData,16 do
-  ?tonum("0b"..sub(encodedData,i,i+7)) .. "           " .. tonum("0b"..sub(encodedData,i+8,i+15))
+ local messagePolynomial={}
+ for i=1,#encodedData,8 do
+  ?tonum("0b"..sub(encodedData,i,i+7))
+  add(messagePolynomial,tonum("0b"..sub(encodedData,i,i+7)))
  end
-
- --Oh fucking buddy.
--- time to generate some fucking nonsense
+ --instead of generating the error correction polynomials
+ -- we'll instead fetch the results from a list since maths is hard and life's too short
+ errorCorrectionPolynomial = getPreGeneratedPolynomialForErrorCorrectionLevelLForVersion(version)
+ ?errorCorrectionPolynomial
+ ?version
 
 end
 
@@ -83,9 +83,9 @@ function encodeDataAsBinaryString(dataToEncode, version)
  return encodedData
 end
 
-function findMinimumQrCodeVersionRequiredForMLevelErrorCorrectionOfAlphanumericData(dataSize)
+function findMinimumQrCodeVersionRequiredForLLevelErrorCorrectionOfAlphanumericData(dataSize)
  --values here going from version 1 to 9
- local upperLimits={20,38,61,90,122,154,178,221,262}
+ local upperLimits={25,47,77,114,154,195,224,279,335}
  local optimalVersion=1
 
  if dataSize > upperLimits[#upperLimits] then
@@ -99,9 +99,9 @@ function findMinimumQrCodeVersionRequiredForMLevelErrorCorrectionOfAlphanumericD
  return optimalVersion
 end
 
---For M Error Correction level
+--For L Error Correction level
 function findTotalNumberOfDataCodewordsForVersion(version)
- local valuesForMediumErrorCorrection={16,28,44,64,86,108,124,154,182}
+ local valuesForMediumErrorCorrection={19,34,55,80,108,136,156,194,232}
  return valuesForMediumErrorCorrection[version]
 end
 
@@ -121,6 +121,18 @@ function encodeAlphaNumericStringToBinary(dataToEncode)
   end
  end
  return encodedData
+end
+
+function getPreGeneratedPolynomialForErrorCorrectionLevelLForVersion(version)
+ --get codewords required for group 1
+ local errorCorrectionCodeWordsForGroup1={7,10,15,20,26,18,20,24,30}
+ local numberOfBlocksRequiredInGroup1={1,1,1,1,1,2,2,2,2}
+ local preGeneratedPolynomialForErrorCorrectionLevelL={
+  {0,87,229,146,149,238,102,21},
+  {0,251,67,46,61,118,70,64,94,32,45},
+  {0,8,183,61,91,202,37,51,58,58,237,140,124,5,99,105}
+ }
+ return preGeneratedPolynomialForErrorCorrectionLevelL[version]
 end
 
 --makeQRCode(tweet_url)
