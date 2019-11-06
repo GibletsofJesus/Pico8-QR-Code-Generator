@@ -43,7 +43,109 @@ function makeQRCode(dataToEncode)
  local encodedData = encodeDataAsBinaryString(dataToEncode, version)
  local errorCorrectionCodewords = generateErrorCorrectionCodeWords(version, encodedData)
 
+  --for larg message, data interweaving data her (yuck, sounds hard!)
+
+  --Now it's time for MODULE PLAEMENT IN  MATRIX!
+  --place finder patterns
+  cls(6)
+  version=8
+  local cornerPosition=(((version-1)*4)+21) - 7
+  rectfill(0,0,cornerPosition+6,cornerPosition+6,3)
+  reserveFormatInformationArea(cornerPosition)
+  placeTimingPatterns(cornerPosition)
+  placeFinderPattern(0,0,0,7)
+  placeFinderPattern(cornerPosition,0,0,7)
+  placeFinderPattern(0,cornerPosition,0,7)
+  placeSeperators(cornerPosition,7)
+
+  if version>2 then
+    --Add alignment patterns
+    local placementArray=getAlignmentPatternLocations(version)
+    for x=6,placementArray[#placementArray],placementArray[2]-placementArray[1] do
+     for y=6,placementArray[#placementArray],placementArray[2]-placementArray[1] do
+       if not((x==6 and y==6) or
+             (x==6 and y==placementArray[#placementArray]) or
+             (y==6 and x==placementArray[#placementArray])) then
+        placeAlignmentPattern(x,y,0,7)
+      end
+     end
+    end
+  end
+  placeDarkModule(version)
+  reserveVersionInformationArea(cornerPosition)
+  ?""
+  ?""
+  ?""
+  ?""
+  ?""
+  ?""
+  ?""
+  ?""
+  ?""
+  ?""
+  ?""
+  ?""
 end
+
+ ---------------------------Module placement matrix-----------------------------
+
+function placeTimingPatterns(cornerPosition)
+  fillp(0xa5a5)
+  line(6,0,6,cornerPosition,7)
+  line(0,6,cornerPosition,6,7)
+  fillp()
+end
+
+function placeFinderPattern(x,y,c1,c2)
+  rectfill(x,y,x+6,y+6,c1)
+  rectfill(x+1,y+1,x+5,y+5,c2)
+  rectfill(x+2,y+2,x+4,y+4,c1)
+end
+
+function placeSeperators(cornerPosition,c)
+  line(0,7,7,7,c)
+  line(7,0,7,7,c)
+  line(cornerPosition-1,7,cornerPosition+6,7,c)
+  line(cornerPosition-1,0,cornerPosition-1,7,c)
+  line(7,cornerPosition-1,7,cornerPosition+6,c)
+  line(0,cornerPosition-1,7,cornerPosition-1,c)
+end
+
+function placeAlignmentPattern(x,y,c1,c2)
+  rect(x-2,y-2,x+2,y+2,c1)
+  rect(x-1,y-1,x+1,y+1,c2)
+  pset(x,y,c1)
+end
+
+function getAlignmentPatternLocations(version)
+   return ({
+      {6,18},
+      {6,22},
+      {6,26},
+      {6,30},
+      {6,34},
+      {6,22,38},
+      {6,24,42},
+      {6,26,46}
+   })[version-1]
+end
+
+function placeDarkModule(version)
+  pset(8,(4*version) + 9,0)
+end
+
+function reserveFormatInformationArea(cornerPosition)
+  line(0,8,8,8,12)
+  line(8,0,8,8,12)
+  line(8,cornerPosition-1,8,cornerPosition+6,12)
+  line(cornerPosition-1,8,cornerPosition+6,8,12)
+end
+
+function reserveVersionInformationArea(cornerPosition)
+  rectfill(0,cornerPosition-2,5,cornerPosition-4,11)
+  rectfill(cornerPosition-2,0,cornerPosition-4,5,11)
+end
+------------------------------Data encoding-------------------------------------
 
 function encodeDataAsBinaryString(dataToEncode, version)
  local modeIndicator = "0010"
@@ -115,6 +217,8 @@ function encodeAlphaNumericStringToBinary(dataToEncode)
  return encodedData
 end
 
+ --------------------------Error correction-------------------------------------
+
 function generateErrorCorrectionCodeWords(version, encodedData)
   local messagePolynomial={}
   for i=1,#encodedData,8 do
@@ -122,13 +226,11 @@ function generateErrorCorrectionCodeWords(version, encodedData)
   end
   --instead of generating the error correction polynomials
   -- we'll instead fetch the results from a list since maths is hard and life's too short
-  errorCorrectionPolynomial = getPreGeneratedPolynomialForErrorCorrectionLevelLForVersion(version)
+  originalErrorCorrectionPolynomial = getPreGeneratedPolynomialForErrorCorrectionLevelLForVersion(version)
 
   --hello world 1-m testing
-  originalErrorCorrectionPolynomial=
-  {0 ,251,67,46 ,61 ,118,70 ,64,94,32,45}
-  messagePolynomial=
-  {32,91 ,11,120,209,114,220,77,67,64,236,17,236,17,236,17}
+  --originalErrorCorrectionPolynomial={0 ,251,67,46 ,61 ,118,70 ,64,94,32,45}
+  --messagePolynomial={32,91 ,11,120,209,114,220,77,67,64,236,17,236,17,236,17}
 
   errorCorrectionPolynomial={}
   for a in all(originalErrorCorrectionPolynomial) do
@@ -155,11 +257,12 @@ function generateErrorCorrectionCodeWords(version, encodedData)
       errorCorrectionPolynomial[i]=bxor(getDecimalValueForAlphaNotation(errorCorrectionPolynomial[i]),useMeforDivision[i])
     else
       errorCorrectionPolynomial[i]=bxor(0,useMeforDivision[i])
-
     end
   end
   useMeforDivision={}
-  if (errorCorrectionPolynomial[1]==0) del(errorCorrectionPolynomial,errorCorrectionPolynomial[1])
+  while (errorCorrectionPolynomial[1]==0) do
+    del(errorCorrectionPolynomial,errorCorrectionPolynomial[1])
+  end
   for a in all(errorCorrectionPolynomial) do
     add(useMeforDivision,a)
   end
@@ -169,7 +272,8 @@ function generateErrorCorrectionCodeWords(version, encodedData)
    for i=1,#errorCorrectionPolynomial do
      ?#errorCorrectionPolynomial-i..": "..errorCorrectionPolynomial[i]
    end
-  end
+   stop()
+ end
  return errorCorrectionPolynomial
 end
 
@@ -194,6 +298,6 @@ function getDecimalValueForAlphaNotation(alphaNotationExponent)
 end
 
 --makeQRCode(tweet_url)
-makeQRCode("hello world")
---makeQRCode("craigtinney.co.uk")
+--makeQRCode("hello world") --make sure to chnage polynomials when testing this!
+makeQRCode("craigtinney.co.uk")
 --makeQRCode("http://craigtinney.co.uk/carts/games/helicopter.html")
