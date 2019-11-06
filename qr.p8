@@ -4,6 +4,8 @@ __lua__
 
 --https://www.thonky.com/qr-code-tutorial
 
+printEC=false
+
 tweet_url=
 "https://twitter.com/intent/tweettexti%20just%20played%20this%20great%20%23pico8%20game%0come%20check%20it%20out%3A%0Ahttps%3A%2F%2Fwww.lexaloffle.com%2Fbbs%2F%3Ftid%3D31506"
 --"https://twitter.com/intent/tweet?text=I%20just%20played%20this%20great%20%23Pico8%20game!%0ACome%20check%20it%20out%3A%0Ahttps%3A%2F%2Fwww.lexaloffle.com%2Fbbs%2F%3Ftid%3D31506&=&=undefined&"
@@ -39,8 +41,7 @@ function makeQRCode(dataToEncode)
  local version = findMinimumQrCodeVersionRequiredForLLevelErrorCorrectionOfAlphanumericData(dataSize)
 
  local encodedData = encodeDataAsBinaryString(dataToEncode, version)
-
- generateErrorCorrectionCodeWords(version, encodedData)
+ local errorCorrectionCodewords = generateErrorCorrectionCodeWords(version, encodedData)
 
 end
 
@@ -124,13 +125,19 @@ function generateErrorCorrectionCodeWords(version, encodedData)
   errorCorrectionPolynomial = getPreGeneratedPolynomialForErrorCorrectionLevelLForVersion(version)
 
   --hello world 1-m testing
-  errorCorrectionPolynomial=
+  originalErrorCorrectionPolynomial=
   {0 ,251,67,46 ,61 ,118,70 ,64,94,32,45}
   messagePolynomial=
   {32,91 ,11,120,209,114,220,77,67,64,236,17,236,17,236,17}
 
+  errorCorrectionPolynomial={}
+  for a in all(originalErrorCorrectionPolynomial) do
+    add(errorCorrectionPolynomial,a)
+  end
+
   local errorCorrectionCodeWordsForGroup1={7,10,15,20,26,18,20,24,30}
   local numberOfBlocksRequiredInGroup1={1,1,1,1,1,2,2,2,2}
+  local totalDivisionStepsRequired=#messagePolynomial
 
   --make sure lead term for each polynomial exponent is the same
   for i=2,#messagePolynomial do
@@ -140,18 +147,30 @@ function generateErrorCorrectionCodeWords(version, encodedData)
   for i=1,errorCorrectionCodeWordsForGroup1[version]+3 do
     add(messagePolynomial,0)
   end
-
- for j=1,16 do
+ local useMeforDivision=messagePolynomial
+ for j=1,totalDivisionStepsRequired do
   for i=1,#errorCorrectionPolynomial do
-    errorCorrectionPolynomial[i]=(getAlphaNotationValueForDecimal(messagePolynomial[j])+errorCorrectionPolynomial[i])%255
-    ?""
-    ?"-----"..i.."-----"
-    ?messagePolynomial[j]
-    ?getAlphaNotationValueForDecimal(messagePolynomial[j])
-    ?errorCorrectionPolynomial[i]
-    if (i>10)stop()
+    if i<#originalErrorCorrectionPolynomial+1 then
+      errorCorrectionPolynomial[i]=(getAlphaNotationValueForDecimal(useMeforDivision[1])+originalErrorCorrectionPolynomial[i])%255
+      errorCorrectionPolynomial[i]=bxor(getDecimalValueForAlphaNotation(errorCorrectionPolynomial[i]),useMeforDivision[i])
+    else
+      errorCorrectionPolynomial[i]=bxor(0,useMeforDivision[i])
+
+    end
+  end
+  useMeforDivision={}
+  if (errorCorrectionPolynomial[1]==0) del(errorCorrectionPolynomial,errorCorrectionPolynomial[1])
+  for a in all(errorCorrectionPolynomial) do
+    add(useMeforDivision,a)
   end
  end
+ if printEC then
+   ?#errorCorrectionPolynomial
+   for i=1,#errorCorrectionPolynomial do
+     ?#errorCorrectionPolynomial-i..": "..errorCorrectionPolynomial[i]
+   end
+  end
+ return errorCorrectionPolynomial
 end
 
 function getPreGeneratedPolynomialForErrorCorrectionLevelLForVersion(version)
