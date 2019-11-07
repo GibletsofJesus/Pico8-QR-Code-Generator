@@ -81,8 +81,68 @@ function makeQRCode(dataToEncode)
   if (version>6) reserveVersionInformationArea(cornerPosition)
 
   placeDataBits(dataBits,cornerPosition)
-
   doDataMasking(cornerPosition)
+
+  formatInfoString = calculateFormattingInformation(7)
+  placeFormatString(formatInfoString,cornerPosition)
+end
+
+--------------------------------Formating info----------------------------------
+
+function calculateFormattingInformation(maskPattern)
+  --this would typically be 01 but we'll be removing any zeros to the left
+  -- in a moment anyway, so just don't bother to put one in here instead
+  local errorCorrectionLLevelBits="1"
+  --using 7 currently for example, but this will need to be changed
+  local maskPatternBits = integerToBinary(maskPattern,3)
+  local formatString=errorCorrectionLLevelBits..maskPatternBits.."0000000000"
+  while #(formatString.."") > 10 do
+    local generatorPolynomial = "10100110111"
+    --pad generator polynomial to make it the same length as the error errorCorrectionBits
+    while #generatorPolynomial < #formatString do
+      generatorPolynomial = generatorPolynomial.."0"
+    end
+
+    formatString=bxor("0b"..formatString,"0b"..generatorPolynomial)
+    formatString=integerToBinary(formatString,#generatorPolynomial)
+    while sub(formatString,1,1)=="0" do
+      formatString=sub(formatString,2,#formatString)
+    end
+  end
+  while #formatString < 10 do
+    formatString="0"..formatString
+  end
+  formatString="0"..errorCorrectionLLevelBits..maskPatternBits..formatString
+  formatString="011001000111101"
+  typeInformationBits={
+    "0b111011111000100",
+    "0b111001011110011",
+    "0b111110110101010",
+    "0b111100010011101",
+    "0b110011000101111",
+    "0b110001100011000",
+    "0b110110001000001",
+    "0b110100101110110"
+  }
+  formatString=bxor("0b"..formatString,typeInformationBits[maskPattern])
+  return integerToBinary(formatString,15)
+end
+
+function placeFormatString(formatInfoString,cornerPosition)
+
+  line(0,8,8,8,1)
+  line(8,0,8,8,1)
+  line(8,cornerPosition-1,8,cornerPosition+6,1)
+  line(cornerPosition-1,8,cornerPosition+6,8,1)
+
+    for i=1,6 do
+      local c = tonum(sub(formatInfoString,i,i))*7
+      pset(i-1,8,c)
+    end
+    for i=1,7 do
+      local c = tonum(sub(formatInfoString,i,i))*7
+      pset(8,cornerPosition+7-i,c)
+    end
 
 end
 
@@ -126,9 +186,6 @@ function placeDataBits(dataBits,cornerPosition)
     x-=2
     upwardDirection=not upwardDirection
   end
-  ?index,64,64,8
-  ?""
-  ?#dataBits
 end
 
 function placeTimingPatterns(cornerPosition)
