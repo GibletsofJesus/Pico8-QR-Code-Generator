@@ -5,6 +5,7 @@ __lua__
 --https://www.thonky.com/qr-code-tutorial
 
 printEC=false
+printDataBits=false
 
 tweet_url=
 "https://twitter.com/intent/tweettexti%20just%20played%20this%20great%20%23pico8%20game%0come%20check%20it%20out%3A%0Ahttps%3A%2F%2Fwww.lexaloffle.com%2Fbbs%2F%3Ftid%3D31506"
@@ -43,23 +44,28 @@ function makeQRCode(dataToEncode)
  local encodedData = encodeDataAsBinaryString(dataToEncode, version)
  local errorCorrectionCodewords = generateErrorCorrectionCodeWords(version, encodedData)
 
-  --for larg message, data interweaving data her (yuck, sounds hard!)
+  --for larg message, data interweaving data here (yuck, sounds hard!)
+  local dataBits=encodedData..errorCorrectionCodewords
+
+  if printDataBits then
+    for i=1,#dataBits,8 do
+     ?tonum("0b"..sub(dataBits,i,i+7))
+    end
+    stop()
+  end
 
   --Now it's time for MODULE PLAEMENT IN  MATRIX!
   --place finder patterns
   cls(6)
-  version=8
   local cornerPosition=(((version-1)*4)+21) - 7
+  camera(-cornerPosition+7,-cornerPosition+7)
   rectfill(0,0,cornerPosition+6,cornerPosition+6,3)
   reserveFormatInformationArea(cornerPosition)
   placeTimingPatterns(cornerPosition)
-  placeFinderPattern(0,0,0,7)
-  placeFinderPattern(cornerPosition,0,0,7)
-  placeFinderPattern(0,cornerPosition,0,7)
+  placeAllFinderPatterns(cornerPosition)
   placeSeperators(cornerPosition,7)
-
-  if version>2 then
-    --Add alignment patterns
+  --Add alignment patterns
+  if version>1 then
     local placementArray=getAlignmentPatternLocations(version)
     for x=6,placementArray[#placementArray],placementArray[2]-placementArray[1] do
      for y=6,placementArray[#placementArray],placementArray[2]-placementArray[1] do
@@ -72,28 +78,70 @@ function makeQRCode(dataToEncode)
     end
   end
   placeDarkModule(version)
-  reserveVersionInformationArea(cornerPosition)
-  ?""
-  ?""
-  ?""
-  ?""
-  ?""
-  ?""
-  ?""
-  ?""
-  ?""
-  ?""
-  ?""
-  ?""
+  if (version>6) reserveVersionInformationArea(cornerPosition)
+
+  placeDataBits(dataBits,cornerPosition)
+
+  doDataMasking(cornerPosition)
+
 end
 
- ---------------------------Module placement matrix-----------------------------
+--------------------------------Data masking------------------------------------
+
+function doDataMasking(cornerPosition)
+  --fuck just do data mask 1
+  for x=0,cornerPosition+6 do
+    for y=0,cornerPosition+6 do
+      local c = pget(x,y)
+      if c>7 then
+        --local flip = (y+x)%2==0
+        local flip = (((x+y)%2)+((x*y)%3))%2 == 0
+        if c==8 and flip then
+          c=15
+        elseif c==15 and flip then
+          c=8
+        end
+        pset(x,y,c-8)
+      end
+    end
+  end
+end
+
+---------------------------Module placement matrix------------------------------
+
+function placeDataBits(dataBits,cornerPosition)
+  local index,x=1,cornerPosition+6
+  local upwardDirection=true
+  while x>-1 do
+    for y=cornerPosition+6,0,-1 do
+      if (not upwardDirection) y=cornerPosition+6-y
+      for _x=x,x-1,-1 do
+        local c=tonum(sub(dataBits,index,index))
+        if pget(_x,y)==3 and c!=null then
+          pset(_x,y,(c*7)+8)
+          index+=1
+        end
+      end
+    end
+    x-=2
+    upwardDirection=not upwardDirection
+  end
+  ?index,64,64,8
+  ?""
+  ?#dataBits
+end
 
 function placeTimingPatterns(cornerPosition)
   fillp(0xa5a5)
   line(6,0,6,cornerPosition,7)
   line(0,6,cornerPosition,6,7)
   fillp()
+end
+
+function placeAllFinderPatterns(cornerPosition)
+  placeFinderPattern(0,0,0,7)
+  placeFinderPattern(cornerPosition,0,0,7)
+  placeFinderPattern(0,cornerPosition,0,7)
 end
 
 function placeFinderPattern(x,y,c1,c2)
@@ -135,10 +183,10 @@ function placeDarkModule(version)
 end
 
 function reserveFormatInformationArea(cornerPosition)
-  line(0,8,8,8,12)
-  line(8,0,8,8,12)
-  line(8,cornerPosition-1,8,cornerPosition+6,12)
-  line(cornerPosition-1,8,cornerPosition+6,8,12)
+  line(0,8,8,8,1)
+  line(8,0,8,8,1)
+  line(8,cornerPosition-1,8,cornerPosition+6,1)
+  line(cornerPosition-1,8,cornerPosition+6,8,1)
 end
 
 function reserveVersionInformationArea(cornerPosition)
@@ -274,7 +322,12 @@ function generateErrorCorrectionCodeWords(version, encodedData)
    end
    stop()
  end
- return errorCorrectionPolynomial
+
+ errorCorrectionCodewords=""
+ for i=1,#errorCorrectionPolynomial do
+   errorCorrectionCodewords=errorCorrectionCodewords..integerToBinary(tonum(errorCorrectionPolynomial[i]),8)
+ end
+ return errorCorrectionCodewords
 end
 
 function getPreGeneratedPolynomialForErrorCorrectionLevelLForVersion(version)
