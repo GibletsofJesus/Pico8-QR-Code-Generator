@@ -58,7 +58,7 @@ function makeQRCode(dataToEncode)
   --place finder patterns
   cls(6)
   local cornerPosition=(((version-1)*4)+21) - 7
-  camera(-cornerPosition+7,-cornerPosition+7)
+  camera(-cornerPosition-7,-cornerPosition-7)
   rectfill(0,0,cornerPosition+6,cornerPosition+6,3)
   reserveFormatInformationArea(cornerPosition)
   placeTimingPatterns(cornerPosition)
@@ -83,8 +83,12 @@ function makeQRCode(dataToEncode)
   placeDataBits(dataBits,cornerPosition)
   doDataMasking(cornerPosition)
 
-  formatInfoString = calculateFormattingInformation(7)
+  local formatInfoString = calculateFormattingInformation(7)
+
   placeFormatString(formatInfoString,cornerPosition)
+  for i=0,10 do
+    ?""
+  end
 end
 
 --------------------------------Formating info----------------------------------
@@ -113,37 +117,45 @@ function calculateFormattingInformation(maskPattern)
     formatString="0"..formatString
   end
   formatString="0"..errorCorrectionLLevelBits..maskPatternBits..formatString
-  formatString="011001000111101"
   typeInformationBits={
-    "0b111011111000100",
-    "0b111001011110011",
-    "0b111110110101010",
-    "0b111100010011101",
-    "0b110011000101111",
-    "0b110001100011000",
-    "0b110110001000001",
-    "0b110100101110110"
+    "0b111011111000100",  --0
+    "0b111001011110011",  --1
+    "0b111110110101010",  --2
+    "0b111100010011101",  --3
+    "0b110011000101111",  --4
+    "0b110001100011000",  --5
+    "0b110110001000001",  --6
+    "0b110100101110110"  --7
   }
-  formatString=bxor("0b"..formatString,typeInformationBits[maskPattern])
-  return integerToBinary(formatString,15)
+  formatString=bxor("0b"..formatString,typeInformationBits[maskPattern+1])
+  local test = sub(typeInformationBits[maskPattern+1],3,17)
+  return test
+  --return integerToBinary(formatString,15)
 end
 
 function placeFormatString(formatInfoString,cornerPosition)
+  --invert bits so we don't draw pixels with value of 0 as black
+  formatInfoString = integerToBinary(bnot("0b"..formatInfoString),15)
 
-  line(0,8,8,8,1)
-  line(8,0,8,8,1)
-  line(8,cornerPosition-1,8,cornerPosition+6,1)
-  line(cornerPosition-1,8,cornerPosition+6,8,1)
-
-    for i=1,6 do
-      local c = tonum(sub(formatInfoString,i,i))*7
-      pset(i-1,8,c)
-    end
-    for i=1,7 do
-      local c = tonum(sub(formatInfoString,i,i))*7
-      pset(8,cornerPosition+7-i,c)
-    end
-
+  for i=1,6 do
+    local c = tonum(sub(formatInfoString,i,i))*7
+    pset(i-1,8,c)
+  end
+  pset(7,8,tonum(sub(formatInfoString,7,7))*7)
+  pset(8,8,tonum(sub(formatInfoString,8,8))*7)
+  pset(8,7,tonum(sub(formatInfoString,9,9))*7)
+  for i=1,7 do
+    local c = tonum(sub(formatInfoString,i,i))*7
+    pset(8,cornerPosition+7-i,c)
+  end
+  for i=8,15 do
+    local c = tonum(sub(formatInfoString,i,i))*7
+    pset(cornerPosition-9+i,8,c)
+  end
+  for i=10,15 do
+    local c = tonum(sub(formatInfoString,i,i))*7
+    pset(8,15-i,c)
+  end
 end
 
 --------------------------------Data masking------------------------------------
@@ -175,11 +187,15 @@ function placeDataBits(dataBits,cornerPosition)
   while x>-1 do
     for y=cornerPosition+6,0,-1 do
       if (not upwardDirection) y=cornerPosition+6-y
+      if (x==6) x-=1
       for _x=x,x-1,-1 do
         local c=tonum(sub(dataBits,index,index))
         if pget(_x,y)==3 and c!=null then
+          c=abs(c-1)
           pset(_x,y,(c*7)+8)
           index+=1
+        elseif c == null and pget(_x,y)==3 then
+          pset(_x,y,15)
         end
       end
     end
@@ -408,6 +424,7 @@ function getDecimalValueForAlphaNotation(alphaNotationExponent)
 end
 
 --makeQRCode(tweet_url)
---makeQRCode("hello world") --make sure to chnage polynomials when testing this!
-makeQRCode("craigtinney.co.uk")
+makeQRCode("craigloveseggs") --make sure to chnage polynomials when testing this!
+--makeQRCode("reddit.com")
+--makeQRCode("craigtinney.co.uk")
 --makeQRCode("http://craigtinney.co.uk/carts/games/helicopter.html")
