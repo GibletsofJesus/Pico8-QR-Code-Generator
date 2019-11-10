@@ -1,6 +1,9 @@
 pico-8 cartridge // http://www.pico-8.com
 version 18
 __lua__
+--qr code generator
+--@ctinney94
+
 --https://www.thonky.com/qr-code-tutorial
 
 mode=4
@@ -9,8 +12,6 @@ mode=4
 
 printEC=false
 printDataBits=false
-
-tweet_url="https://twitter.com/intent/tweet?text=I%20love%20QR%20codes!"
 
 function stringToArray(str)
 	local a,l={},0
@@ -38,12 +39,28 @@ end
 
 function _init()
   poke(0x5f2c,3)
-
-  makeQRCode("https://itch.io/jam/procjam/entries")
 end
 
 function _draw()
+  backgroundCol=6
+  camera(0,0)
+  camx=-19
+  camy=-19
+  cls(9)
+  encodeMe="https://itch.io/jam/procjam"
+  makeQRCode(encodeMe)
+  pal(9,backgroundCol,1)
+  text={"pico 8","qr cODE MAKER"}
+  c={1,1}
+  for i=1,#text do
+   ?text[i],camx+32-#text[i]*2,camy-6+i*8,7
+   ?text[i],camx+32-#text[i]*2,camy-7+i*8,c[i]
+ end
+  for i=0,14 do
+    flip()
+  end
 end
+-->8
 -------------------------------helpers------------------------------------------
 
 function integerToBinary(binaryValue,totalBits)
@@ -99,41 +116,14 @@ function makeQRCode(dataToEncode)
     stop()
   end
 
-  --Now it's time for MODULE PLAEMENT IN  MATRIX!
-  --place finder patterns
-  cls(6)
   local cornerPosition=(((version-1)*4)+21) - 7
-  camera(-(cornerPosition-7)/2,-(cornerPosition-7)/2)
-  rectfill(0,0,cornerPosition+6,cornerPosition+6,3)
-  reserveFormatInformationArea(cornerPosition)
-  placeTimingPatterns(cornerPosition)
-  placeAllFinderPatterns(cornerPosition)
-  placeSeperators(cornerPosition,7)
-  --Add alignment patterns
-  if version>1 then
-    local placementArray=getAlignmentPatternLocations(version)
-    for x=6,placementArray[#placementArray],placementArray[2]-placementArray[1] do
-     for y=6,placementArray[#placementArray],placementArray[2]-placementArray[1] do
-       if not((x==6 and y==6) or
-             (x==6 and y==placementArray[#placementArray]) or
-             (y==6 and x==placementArray[#placementArray])) then
-        placeAlignmentPattern(x,y,0,7)
-      end
-     end
-    end
-  end
-  placeDarkModule(version)
-  if (version>6) reserveVersionInformationArea(cornerPosition)
 
+  placeFixedPatterns(version,cornerPosition)
   placeDataBits(dataBits,cornerPosition)
-  doDataMasking(cornerPosition)
 
-  local formatInfoString = calculateFormattingInformation(7)
-
+  local optimalMask = findAndApplyBestDataMask(cornerPosition)
+  local formatInfoString = calculateFormattingInformation(optimalMask)
   placeFormatString(formatInfoString,cornerPosition)
-  for i=0,10 do
-    ?""
-  end
 end
 
 --------------------------------Formating info----------------------------------
@@ -173,7 +163,7 @@ function calculateFormattingInformation(maskPattern)
     "0b110100101110110"  --7
   }
   formatString=bxor("0b"..formatString,typeInformationBits[maskPattern+1])
-  local test = sub(typeInformationBits[maskPattern+1],3,17)
+  local test = sub(typeInformationBits[maskPattern],3,17)
   return test
   --return integerToBinary(formatString,15)
 end
@@ -205,14 +195,47 @@ end
 
 --------------------------------Data masking------------------------------------
 
-function doDataMasking(cornerPosition)
-  --fuck just do data mask 1
+function findAndApplyBestDataMask(cornerPosition)
+  memcpy(0,0x6000,4096)
+  cls(8)
+  camera(camx,camy)
+  local masks={
+    function(x,y)
+      return (x+y)%2==0
+    end,
+    function(x,y)
+      return y%2==0
+    end,
+    function(x,y)
+      return x%3==0
+    end,
+    function(x,y)
+      return (x+y)%3==0
+    end,
+    function(x,y)
+      return (flr(y/2)+flr(x/3))%2==0
+    end,
+    function(x,y)
+      return ((x*y)%2)+((x*y)%3)==0
+    end,
+    function(x,y)
+      return ((x*y)%2)+((x*y)%3)%2==0
+    end,
+    function(x,y)
+      return (((x+y)%2)+((x*y)%3))%2 == 0
+    end
+  }
+  palt(0,false)
+  sspr(0,0,128,128)
+
+  local mask = 1+flr(rnd(8))
+
   for x=0,cornerPosition+6 do
     for y=0,cornerPosition+6 do
       local c = pget(x,y)
       if c>7 then
-        --local flip = (y+x)%2==0
-        local flip = (((x+y)%2)+((x*y)%3))%2 == 0
+        local flip = masks[mask](x,y)
+        --local flip = masks[7](x,y)
         if c==8 and flip then
           c=15
         elseif c==15 and flip then
@@ -222,9 +245,35 @@ function doDataMasking(cornerPosition)
       end
     end
   end
+  rectfill(camx,0,-1,127,backgroundCol)
+  rectfill(127,camy,camx,-1,backgroundCol)
+  return mask
 end
 
 ---------------------------Module placement matrix------------------------------
+
+function placeFixedPatterns(version, cornerPosition)
+  rectfill(0,0,cornerPosition+6,cornerPosition+6,3)
+  reserveFormatInformationArea(cornerPosition)
+  placeTimingPatterns(cornerPosition)
+  placeAllFinderPatterns(cornerPosition)
+  placeSeperators(cornerPosition,7)
+  --Add alignment patterns
+  if version>1 then
+    local placementArray=getAlignmentPatternLocations(version)
+    for x=6,placementArray[#placementArray],placementArray[2]-placementArray[1] do
+     for y=6,placementArray[#placementArray],placementArray[2]-placementArray[1] do
+       if not((x==6 and y==6) or
+             (x==6 and y==placementArray[#placementArray]) or
+             (y==6 and x==placementArray[#placementArray])) then
+        placeAlignmentPattern(x,y,0,7)
+      end
+     end
+    end
+  end
+  placeDarkModule(version)
+  if (version>6) reserveVersionInformationArea(cornerPosition)
+end
 
 function placeDataBits(dataBits,cornerPosition)
   local index,x=1,cornerPosition+6
@@ -433,7 +482,6 @@ function generateErrorCorrectionCodeWords(version, encodedData)
   end
 
   local errorCorrectionCodeWordsForGroup1={7,10,15,20,26}
-  local numberOfBlocksRequiredInGroup1=1 -- for up to version 5
   local totalDivisionStepsRequired=#messagePolynomial
 
   --make sure lead term for each polynomial exponent is the same
